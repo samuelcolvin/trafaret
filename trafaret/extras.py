@@ -27,7 +27,7 @@ class KeysSubset(Key):
         self.name = '[%s]' % ', '.join(self.keys)
         self.trafaret = Any()
 
-    def pop(self, data):
+    def extract(self, data):
         subdict = dict((k, data.get(k)) for k in self.keys_names() if k in data)
         keys_names = self.keys_names()
         res = catch_error(self.trafaret, subdict)

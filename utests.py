@@ -280,18 +280,18 @@ class TestKey(unittest.TestCase):
         default = lambda: 1
         res = t.Key(name='test', default=default)
         self.assertEqual(repr(res), '<Key "test">')
-        res = next(t.Key(name='test', default=default).pop({}))
+        res = next(t.Key(name='test', default=default).extract({}))
         self.assertEqual(res, ('test', 1, ('test',)))
-        res = next(t.Key(name='test', default=2).pop({}))
+        res = next(t.Key(name='test', default=2).extract({}))
         self.assertEqual(res, ('test', 2, ('test',)))
         default = lambda: None
-        res = next(t.Key(name='test', default=default).pop({}))
+        res = next(t.Key(name='test', default=default).extract({}))
         self.assertEqual(res, ('test', None, ('test',)))
-        res = next(t.Key(name='test', default=None).pop({}))
+        res = next(t.Key(name='test', default=None).extract({}))
         self.assertEqual(res, ('test', None, ('test',)))
         # res = next(t.Key(name='test').pop({}))
         # self.assertEqual(res, ('test', DataError(is required)))
-        res = list(t.Key(name='test', optional=True).pop({}))
+        res = list(t.Key(name='test', optional=True).extract({}))
         self.assertEqual(res, [])
 
 

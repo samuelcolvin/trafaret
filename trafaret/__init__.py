@@ -875,7 +875,7 @@ class Key(object):
         self.optional = optional
         self.trafaret = trafaret or Any()
 
-    def pop(self, data):
+    def extract(self, data):
         if self.name in data or self.default is not _empty:
             if callable(self.default):
                 default = self.default()
@@ -996,7 +996,7 @@ class Dict(Trafaret):
         errors = {}
         touched_names = []
         for key in self.keys:
-            for k, v, name in key.pop(value):
+            for k, v, name in key.extract(value):
                 if isinstance(v, DataError):
                     errors[k] = v
                 else:
