@@ -863,9 +863,9 @@ class Key(object):
     """
     Helper class for Dict.
 
-    It gets `name`, and provides method `pop(data)` that extract key value
+    It gets `name`, and provides method `extract(data)` that extract key value
     from data through mapping `get` method.
-    Key `pop` method yields `(key name, Maybe(DataError), [touched keys])` triples.
+    Key `extract` method yields `(key name, Maybe(DataError), [touched keys])` triples.
     """
 
     def __init__(self, name, default=_empty, optional=False, to_name=None, trafaret=None):
@@ -889,7 +889,7 @@ class Key(object):
             raise StopIteration
 
         if not self.optional:
-            yield self.name, DataError(error='is required'), self.name
+            yield self.name, DataError(error='is required'), (self.name,)
 
     def keys_names(self):
         yield self.name
