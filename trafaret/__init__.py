@@ -7,6 +7,7 @@ import re
 import copy
 import itertools
 import numbers
+from collections import Mapping as AbcMapping
 import pkg_resources
 
 
@@ -829,7 +830,7 @@ class Tuple(Trafaret):
     >>> extract_error(t, [3, 4, 5])
     {2: 'value is not a string'}
     >>> t
-    <Tuple(<Int>, <Int>, <String>)
+    <Tuple(<Int>, <Int>, <String>)>
     """
 
     def __init__(self, *args):
@@ -859,26 +860,12 @@ class Tuple(Trafaret):
 
 
 class Key(object):
-
     """
     Helper class for Dict.
 
-    >>> default = lambda: 1
-    >>> Key(name='test', default=default)
-    <Key "test">
-    >>> next(Key(name='test', default=default).pop({}))
-    ('test', 1)
-    >>> next(Key(name='test', default=2).pop({}))
-    ('test', 2)
-    >>> default = lambda: None
-    >>> next(Key(name='test', default=default).pop({}))
-    ('test', None)
-    >>> next(Key(name='test', default=None).pop({}))
-    ('test', None)
-    >>> next(Key(name='test').pop({}))
-    ('test', DataError(is required))
-    >>> list(Key(name='test', optional=True).pop({}))
-    []
+    It gets `name`, and provides method `pop(data)` that extract key value
+    from data through mapping `get` method.
+    Key `pop` method yields `(key name, Maybe(DataError), [touched keys])` triples.
     """
 
     def __init__(self, name, default=_empty, optional=False, to_name=None, trafaret=None):
@@ -894,13 +881,15 @@ class Key(object):
                 default = self.default()
             else:
                 default = self.default
-            # default = callable(self.default) and self.default() or self.default
-            yield self.get_name(), catch_error(self.trafaret,
-                    data.pop(self.name, default))
+            yield (
+                self.get_name(),
+                catch_error(self.trafaret, data.get(self.name, default)),
+                (self.name,)
+            )
             raise StopIteration
 
         if not self.optional:
-            yield self.name, DataError(error='is required')
+            yield self.name, DataError(error='is required'), self.name
 
     def keys_names(self):
         yield self.name
@@ -1001,25 +990,28 @@ class Dict(Trafaret):
         return self
 
     def check_and_return(self, value):
-        if not isinstance(value, dict):
+        if not isinstance(value, AbcMapping):
             self._failure("value is not dict")
-        data = copy.copy(value)
         collect = {}
         errors = {}
+        touched_names = []
         for key in self.keys:
-            for k, v in key.pop(data):
+            for k, v, name in key.pop(value):
                 if isinstance(v, DataError):
                     errors[k] = v
                 else:
                     collect[k] = v
+                touched_names.extend(name)
         if not self.ignore_any:
-            for key in data:
+            for key in value:
+                if key in touched_names:
+                    continue
                 if key in self.ignore:
                     continue
                 if not self.allow_any and key not in self.extras:
                     errors[key] = DataError("%s is not allowed key" % key)
                 else:
-                    collect[key] = data[key]
+                    collect[key] = value[key]
         if errors:
             raise DataError(error=errors)
         return collect
@@ -1106,17 +1098,9 @@ def DictKeys(keys):
 
 
 class Mapping(Trafaret):
-
     """
-    >>> trafaret = Mapping(String, Int)
-    >>> trafaret
-    <Mapping(<String> => <Int>)>
-    >>> _dd(trafaret.check({"foo": 1, "bar": 2}))
-    "{'bar': 2, 'foo': 1}"
-    >>> extract_error(trafaret, {"foo": 1, "bar": None})
-    {'bar': {'value': 'value is not int'}}
-    >>> extract_error(trafaret, {"foo": 1, 2: "bar"})
-    {2: {'key': 'value is not a string', 'value': "value can't be converted to int"}}
+    Mapping gets two trafarets as arguments, one for key and one for value,
+    like `Mapping(t.Int, t.List(t.Str))`.
     """
 
     def __init__(self, key, value):
@@ -1298,7 +1282,7 @@ def guard(trafaret=None, **kwargs):
     >>> help(fn)
     Help on function fn:
     <BLANKLINE>
-    fn(*args, **kwargs)
+    fn(a, b, c='default')
         guarded with <Dict(a=<String>, b=<Int>, c=<String>)>
     <BLANKLINE>
         docstring

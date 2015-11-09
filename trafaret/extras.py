@@ -28,14 +28,15 @@ class KeysSubset(Key):
         self.trafaret = Any()
 
     def pop(self, data):
-        subdict = dict((k, data.pop(k)) for k in self.keys_names() if k in data)
+        subdict = dict((k, data.get(k)) for k in self.keys_names() if k in data)
+        keys_names = self.keys_names()
         res = catch_error(self.trafaret, subdict)
         if isinstance(res, DataError):
             for k, e in res.error.items():
-                yield k, e if isinstance(e, DataError) else DataError(e)
+                yield k, e if isinstance(e, DataError) else DataError(e), keys_names
         else:
             for k, v in res.items():
-                yield k, v
+                yield k, v, keys_names
 
     def keys_names(self):
         if isinstance(self.trafaret, Dict):
