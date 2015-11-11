@@ -885,7 +885,7 @@ class Key(object):
         self.optional = optional
         self.trafaret = trafaret or Any()
 
-    def extract(self, data):
+    def __call__(self, data):
         if self.name in data or self.default is not _empty:
             if callable(self.default):
                 default = self.default()
@@ -896,7 +896,7 @@ class Key(object):
                 catch_error(self.trafaret, self.get_data(data, default)),
                 (self.name,)
             )
-            raise StopIteration
+            return
 
         if not self.optional:
             yield self.name, DataError(error='is required'), (self.name,)
@@ -969,14 +969,19 @@ class Dict(Trafaret):
     "{'baz': 'nyanya', 'foo': 4}"
     """
 
-    def __init__(self, keys={}, **trafarets):
+    def __init__(self, *args, keys={}, **trafarets):
+        if args and isinstance(args[0], AbcMapping):
+            keys = args[0]
+            args = args[1:]
+        if any(not callable(key) for key in args):
+            raise RuntimeError('Keys in single attributes must be callables')
         self.extras = []
         self.allow_any = False
         self.ignore = []
         self.ignore_any = False
-        self.keys = []
+        self.keys = list(args)
         for key, trafaret in itertools.chain(trafarets.items(), keys.items()):
-            key_ = key if isinstance(key, Key) else Key(key)
+            key_ = Key(key) if isinstance(key, str_types) else key
             key_.set_trafaret(self._trafaret(trafaret))
             self.keys.append(key_)
 
@@ -1009,8 +1014,8 @@ class Dict(Trafaret):
         errors = {}
         touched_names = []
         for key in self.keys:
-            if hasattr(key, 'extract'):
-                for k, v, name in key.extract(value):
+            if callable(key):
+                for k, v, name in key(value):
                     if isinstance(v, DataError):
                         errors[k] = v
                     else:
@@ -1021,12 +1026,13 @@ class Dict(Trafaret):
                     'Old pop based Keys subclasses deprecated. See README',
                     DeprecationWarning
                 )
+                value_keys = set(value.keys())
                 for k, v in key.pop(value):
                     if isinstance(v, DataError):
                         errors[k] = v
                     else:
                         collect[k] = v
-                    touched_names.extend(key.name)
+                touched_names.extend(value_keys - set(value.keys()))
 
         if not self.ignore_any:
             for key in value:

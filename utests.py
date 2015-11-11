@@ -77,6 +77,29 @@ class TestDictTrafaret(unittest.TestCase):
         res = extract_error(trafaret, {"foo": 1, "ham": 100, "baz": None})
         self.assertEqual(res, {'bar': 'is required'})
 
+    def test_old_keys(self):
+        class OldKey(object):
+            def pop(self, value):
+                data = value.pop('testkey')
+                yield 'testkey', data
+
+            def set_trafaret(self, trafaret):
+                pass
+        trafaret = t.Dict({
+            OldKey(): t.Any
+        })
+        res = trafaret.check({'testkey': 123})
+        self.assertEqual(res, {'testkey': 123})
+
+    def test_callable_key(self):
+        def simple_key(value):
+            yield 'simple', 'simple data', []
+
+        trafaret = t.Dict(simple_key)
+        res = trafaret.check({})
+        self.assertEqual(res, {'simple': 'simple data'})
+
+
     def test_base2(self):
         trafaret = t.Dict({t.Key('bar', optional=True): t.String}, foo=t.Int)
         trafaret.allow_extra('*')
@@ -280,18 +303,18 @@ class TestKey(unittest.TestCase):
         default = lambda: 1
         res = t.Key(name='test', default=default)
         self.assertEqual(repr(res), '<Key "test">')
-        res = next(t.Key(name='test', default=default).extract({}))
+        res = next(t.Key(name='test', default=default)({}))
         self.assertEqual(res, ('test', 1, ('test',)))
-        res = next(t.Key(name='test', default=2).extract({}))
+        res = next(t.Key(name='test', default=2)({}))
         self.assertEqual(res, ('test', 2, ('test',)))
         default = lambda: None
-        res = next(t.Key(name='test', default=default).extract({}))
+        res = next(t.Key(name='test', default=default)({}))
         self.assertEqual(res, ('test', None, ('test',)))
-        res = next(t.Key(name='test', default=None).extract({}))
+        res = next(t.Key(name='test', default=None)({}))
         self.assertEqual(res, ('test', None, ('test',)))
         # res = next(t.Key(name='test').pop({}))
         # self.assertEqual(res, ('test', DataError(is required)))
-        res = list(t.Key(name='test', optional=True).extract({}))
+        res = list(t.Key(name='test', optional=True)({}))
         self.assertEqual(res, [])
 
 
