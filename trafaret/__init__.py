@@ -7,6 +7,7 @@ import re
 import copy
 import itertools
 import numbers
+import warnings
 from collections import Mapping as AbcMapping
 import pkg_resources
 
@@ -863,9 +864,18 @@ class Key(object):
     """
     Helper class for Dict.
 
-    It gets `name`, and provides method `extract(data)` that extract key value
-    from data through mapping `get` method.
-    Key `extract` method yields `(key name, Maybe(DataError), [touched keys])` triples.
+    It gets ``name``, and provides method ``extract(data)`` that extract key value
+    from data through mapping ``get`` method.
+    Key `extract` method yields ``(key name, Maybe(DataError), [touched keys])`` triples.
+
+    You can redefine ``get_data(data, default)`` method in subclassed ``Key`` if you want to use something other
+    then ``.get(...)`` method.
+
+    Like this for the aiohttp MultiDict::
+
+        class MDKey(t.Key):
+            def get_data(data, default):
+                return data.get_all(self.name, default)
     """
 
     def __init__(self, name, default=_empty, optional=False, to_name=None, trafaret=None):
@@ -883,13 +893,16 @@ class Key(object):
                 default = self.default
             yield (
                 self.get_name(),
-                catch_error(self.trafaret, data.get(self.name, default)),
+                catch_error(self.trafaret, self.get_data(data, default)),
                 (self.name,)
             )
             raise StopIteration
 
         if not self.optional:
             yield self.name, DataError(error='is required'), (self.name,)
+
+    def get_data(self, data, default):
+        return data.get(self.name, default)
 
     def keys_names(self):
         yield self.name
@@ -996,12 +1009,25 @@ class Dict(Trafaret):
         errors = {}
         touched_names = []
         for key in self.keys:
-            for k, v, name in key.extract(value):
-                if isinstance(v, DataError):
-                    errors[k] = v
-                else:
-                    collect[k] = v
-                touched_names.extend(name)
+            if hasattr(key, 'extract'):
+                for k, v, name in key.extract(value):
+                    if isinstance(v, DataError):
+                        errors[k] = v
+                    else:
+                        collect[k] = v
+                    touched_names.extend(name)
+            else:
+                warnings.warn(
+                    'Old pop based Keys subclasses deprecated. See README',
+                    DeprecationWarning
+                )
+                for k, v in key.pop(value):
+                    if isinstance(v, DataError):
+                        errors[k] = v
+                    else:
+                        collect[k] = v
+                    touched_names.extend(key.name)
+
         if not self.ignore_any:
             for key in value:
                 if key in touched_names:
@@ -1040,7 +1066,7 @@ class Dict(Trafaret):
         r += ")>"
         return r
 
-    def extend(self, other):
+    def merge(self, other):
         """
         Extends one Dict with other Dict Key`s or Key`s list,
         or dict instance supposed for Dict
@@ -1073,7 +1099,7 @@ class Dict(Trafaret):
         new_trafaret.keys = self.keys + other_keys
         return new_trafaret
 
-    __add__ = extend
+    __add__ = merge
 
 
 def DictKeys(keys):

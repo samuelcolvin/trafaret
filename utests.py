@@ -547,7 +547,7 @@ class TestKeysSubset(unittest.TestCase):
         d = t.Dict({KeysSubset('pwd', 'pwd1'): cmp_pwds, 'key1': t.String})
 
         res = d.check({'pwd': 'a', 'pwd1': 'a', 'key1': 'b'}).keys()
-        self.assertEqual(list(res), ['key1', 'pwd'])
+        self.assertEqual(list(sorted(res)), ['key1', 'pwd'])
 
         res = extract_error(d.check, {'pwd': 'a', 'pwd1': 'c', 'key1': 'b'})
         self.assertEqual(res, {'pwd': 'Not equal'})
