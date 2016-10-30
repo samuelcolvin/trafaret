@@ -877,7 +877,16 @@ class Tuple(Trafaret):
         return '<Tuple(' + ', '.join(repr(t) for t in self.trafarets) + ')>'
 
 
-class Key(object):
+class BaseKey(object):
+    def set_trafaret(self, trafaret):
+        self.trafaret = Trafaret._trafaret(trafaret)
+        return self
+
+    def set_parent(self, parent):
+        pass
+
+
+class Key(BaseKey):
     """
     Helper class for Dict.
 
@@ -925,10 +934,6 @@ class Key(object):
     def keys_names(self):
         yield self.name
 
-    def set_trafaret(self, trafaret):
-        self.trafaret = Trafaret._trafaret(trafaret)
-        return self
-
     def __rshift__(self, name):
         self.to_name = name
         return self
@@ -942,6 +947,31 @@ class Key(object):
     def __repr__(self):
         return '<%s "%s"%s>' % (self.__class__.__name__, self.name,
            ' to "%s"' % self.to_name if getattr(self, 'to_name', False) else '')
+
+
+class AnyKey(BaseKey):
+    name = 'ANY'
+    __slots__ = ['trafaret', 'defined_keys']
+
+    def __init__(self):
+        self.trafaret = None
+        self.defined_keys = set()
+
+    def set_parent(self, parent):
+        self.defined_keys = {getattr(k, 'name', k)
+                             for k in parent.keys() if not isinstance(k, AnyKey)}
+
+    def __call__(self, data):
+        for k, v in data.items():
+            if k not in self.defined_keys:
+                yield (
+                    k,
+                    catch_error(self.trafaret, v),
+                    (k,)
+                )
+
+    def __repr__(self):
+        return '<%s>' % self.__class__.__name__
 
 
 class Dict(Trafaret):
@@ -984,6 +1014,9 @@ class Dict(Trafaret):
     >>> _ = trafaret.ignore_extra('*')
     >>> _dd(trafaret.check({'foo': 4, 'foor': 5}))
     "{'baz': 'nyanya', 'foo': 4}"
+    >>> trafaret = Dict({AnyKey(): String}, foo=Int)
+    >>> _dd(trafaret.check({'foo': 4, 'fooz': 'barz'}))
+    "{'foo': 4, 'fooz': 'barz'}"
     """
     __slots__ = ['extras', 'allow_any', 'ignore', 'ignore_any', 'keys']
 
@@ -1000,9 +1033,16 @@ class Dict(Trafaret):
         self.ignore = []
         self.ignore_any = False
         self.keys = list(args)
-        for key, trafaret in itertools.chain(trafarets.items(), keys.items()):
+        for key, trafaret_ in itertools.chain(trafarets.items(), keys.items()):
             key_ = Key(key) if isinstance(key, str_types) else key
-            key_.set_trafaret(self._trafaret(trafaret))
+            key_.set_trafaret(self._trafaret(trafaret_))
+            if hasattr(key, 'set_parent'):
+                key_.set_parent(trafarets)
+            else:
+                warnings.warn(
+                    'Key class is missing the "set_parent" method',
+                    DeprecationWarning
+                )
             self.keys.append(key_)
 
     def allow_extra(self, *names):

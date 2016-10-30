@@ -124,6 +124,23 @@ class TestDictTrafaret(unittest.TestCase):
         res = trafaret.check({'foo': 4, 'foor': 5})
         self.assertEqual(res, {'baz': 'nyanya', 'foo': 4})
 
+    def test_any_key(self):
+        trafaret = t.Dict({t.AnyKey(): t.String})
+        res = trafaret.check({'ham': 'eggs', 'baz': 'bar'})
+        self.assertEqual(res, {'ham': 'eggs', 'baz': 'bar'})
+
+        trafaret = t.Dict({t.AnyKey(): t.String}, foo=t.Int)
+        res = trafaret.check({'foo': 1, 'ham': 'eggs', 'baz': 'bar'})
+        self.assertEqual(res, {'foo': 1, 'ham': 'eggs', 'baz': 'bar'})
+        res = extract_error(trafaret, {'foo': 1, 'ham': 'eggs', 'baz': None})
+        self.assertEqual(res, {'baz': 'value is not a string'})
+
+        trafaret = t.Dict({t.AnyKey(): t.String, t.Key('thing', optional=True): t.String})
+        res = trafaret.check({'ham': 'eggs', 'baz': 'bar'})
+        self.assertEqual(res, {'ham': 'eggs', 'baz': 'bar'})
+        res = trafaret.check({'ham': 'eggs', 'baz': 'bar', 'thing': 'has value'})
+        self.assertEqual(res, {'ham': 'eggs', 'baz': 'bar', 'thing': 'has value'})
+
     def test_add(self):
         first = t.Dict({
             t.Key('bar', default='nyanya') >> 'baz': t.String},
@@ -320,6 +337,25 @@ class TestKey(unittest.TestCase):
         res = list(t.Key(name='test', optional=True)({}))
         self.assertEqual(res, [])
 
+
+class TestAnyKey(unittest.TestCase):
+    def test_any_key(self):
+        k = t.AnyKey()
+        self.assertEqual(repr(k), '<AnyKey>')
+
+        with self.assertRaises(StopIteration):
+            next(k({}))
+
+        res = list(k({'test': 'value'}))
+        self.assertEqual(res, [('test', None, ('test',))])
+
+        k.set_parent({'foo': object()})
+
+        with self.assertRaises(StopIteration):
+            next(k({'foo': 'bar'}))
+
+        res = list(k({'foo': 'bar', 'test': 'value'}))
+        self.assertEqual(res, [('test', None, ('test',))])
 
 
 class TestList(unittest.TestCase):
